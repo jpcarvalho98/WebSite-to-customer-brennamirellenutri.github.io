@@ -23,7 +23,8 @@
     "id": 4,
     "nome": "Casec",
     "logo": "assets/images/convenios/casec.png",
-    "ativo": false
+    "ativo": true,
+    "clinics": ["instituto"]
   },
   {
     "id": 5,
