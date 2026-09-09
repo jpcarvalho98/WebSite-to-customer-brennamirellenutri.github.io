@@ -1,3 +1,46 @@
+const SAFE_COUPON_HOSTS = new Set([
+    'www.oceandrop.com.br',
+    'www.sanavita.com.br',
+    'www.vitafor.com.br',
+    'www.truesource.com.br',
+    'www.nutrify.com.br',
+    'www.centralnutrition.com.br',
+    'www.beltnutrition.com.br',
+    'www.puravida.com.br'
+]);
+
+function createTextElement(tagName, className, text) {
+    const element = document.createElement(tagName);
+    element.className = className;
+    element.textContent = typeof text === 'string' ? text : '';
+    return element;
+}
+
+function getSafeCouponUrl(value) {
+    try {
+        const url = new URL(value);
+        if (url.protocol !== 'https:' || !SAFE_COUPON_HOSTS.has(url.hostname)) return null;
+        return url.href;
+    } catch {
+        return null;
+    }
+}
+
+function getSafeAssetUrl(value, directory, allowSubdirectories = false) {
+    if (typeof value !== 'string' || !value.startsWith(directory)) return null;
+    if (value.includes('..') || value.includes('?') || value.includes('#')) return null;
+    if (!allowSubdirectories && value.slice(directory.length).includes('/')) return null;
+    if (!/\.(?:png|jpe?g|webp|svg)$/i.test(value)) return null;
+
+    try {
+        const url = new URL(value, window.location.href);
+        if (url.origin !== window.location.origin || url.protocol !== window.location.protocol) return null;
+        return url.href;
+    } catch {
+        return null;
+    }
+}
+
 // Mobile menu functionality
 const menuBtn = document.getElementById('menuBtn');
 const closeMenuBtn = document.getElementById('closeMenuBtn');
@@ -212,29 +255,6 @@ function initRecomendacoes() {
 
     // Coupons: copy buttons
     function initCouponButtons() {
-        // Analytics helper: send event only for coupon copy actions
-        function sendCopyAnalytics(code, brand) {
-            try {
-                const params = { coupon_code: code, coupon_brand: brand || 'unknown' };
-                // GA4 via gtag
-                if (window.gtag && typeof window.gtag === 'function') {
-                    window.gtag('event', 'copy_coupon', params);
-                    return;
-                }
-                // dataLayer (Tag Manager)
-                if (window.dataLayer && Array.isArray(window.dataLayer)) {
-                    window.dataLayer.push(Object.assign({ event: 'copy_coupon' }, params));
-                    return;
-                }
-                // Universal Analytics fallback
-                if (window.ga && typeof window.ga === 'function') {
-                    window.ga('send', 'event', 'Coupons', 'Copy', code);
-                    return;
-                }
-            } catch (err) {
-                console.warn('Failed to send analytics for coupon copy', err);
-            }
-        }
         const copyBtns = section.querySelectorAll('.reco-copy-btn');
         copyBtns.forEach(btn => {
             btn.addEventListener('click', async () => {
@@ -255,14 +275,6 @@ function initRecomendacoes() {
                     }
                     const previous = btn.textContent;
                     btn.textContent = 'Copiado!';
-                    // send analytics only for copy buttons (coupon copy)
-                    try {
-                        const brandEl = card.querySelector('h4');
-                        const brand = card.dataset && card.dataset.brand ? card.dataset.brand : (brandEl ? brandEl.textContent.trim() : '');
-                        sendCopyAnalytics(code, brand);
-                    } catch (e) {
-                        console.warn('Error while preparing analytics payload', e);
-                    }
                     setTimeout(() => btn.textContent = previous, 1200);
                 } catch (e) {
                     console.warn('Copy failed', e);
@@ -280,32 +292,43 @@ function initRecomendacoes() {
             const couponsGrid = section.querySelector('#reco-coupons-grid');
             if (!couponsGrid) return;
 
-            // Clear existing (static) cards
-            couponsGrid.innerHTML = '';
+            couponsGrid.replaceChildren();
 
             coupons.forEach(coupon => {
+                if (!coupon || typeof coupon !== 'object') return;
+                const couponUrl = getSafeCouponUrl(coupon.url);
+                if (!couponUrl || typeof coupon.brand !== 'string' || typeof coupon.code !== 'string') return;
+
                 const card = document.createElement('div');
                 card.className = 'reco-coupon-card relative p-6 rounded-xl shadow-md hover:shadow-lg transition-shadow';
                 card.setAttribute('data-coupon', coupon.code);
                 card.setAttribute('data-brand', coupon.brand);
 
-                // Determine some simple styling based on discount presence (keeps similar visuals)
-                const badge = coupon.discount ? `<span class="absolute top-4 right-4 bg-[#aa6e69] text-white text-xs font-semibold px-2 py-1 rounded">${coupon.discount}</span>` : '';
+                if (typeof coupon.discount === 'string' && coupon.discount) {
+                    card.appendChild(createTextElement('span', 'absolute top-4 right-4 bg-[#aa6e69] text-white text-xs font-semibold px-2 py-1 rounded', coupon.discount));
+                }
 
-                card.innerHTML = `
-                    ${badge}
-                    <div class="mb-4">
-                        <h4 class="font-bold text-lg accent-color">${coupon.brand}</h4>
-                    </div>
-                    <div class="mb-4 p-3 bg-[#f5e8e7] rounded-lg">
-                        <p class="text-xs text-gray-600 mb-1">Código de desconto:</p>
-                        <span class="font-mono font-bold text-sm">${coupon.code}</span>
-                    </div>
-                    <div class="flex gap-2">
-                        <button class="reco-copy-btn flex-1 px-3 py-2 rounded bg-[#aa6e69] text-white text-sm font-medium hover:bg-[#8e5b57] transition-colors">Copiar</button>
-                        <a href="${coupon.url}" target="_blank" rel="noopener noreferrer" class="flex-1 px-3 py-2 rounded bg-[#f5e8e7] text-[#aa6e69] text-sm font-medium hover:bg-[#f0e0db] transition-colors text-center">Visitar</a>
-                    </div>
-                `;
+                const brandWrapper = document.createElement('div');
+                brandWrapper.className = 'mb-4';
+                brandWrapper.appendChild(createTextElement('h4', 'font-bold text-lg accent-color', coupon.brand));
+                card.appendChild(brandWrapper);
+
+                const codeWrapper = document.createElement('div');
+                codeWrapper.className = 'mb-4 p-3 bg-[#f5e8e7] rounded-lg';
+                codeWrapper.appendChild(createTextElement('p', 'text-xs text-gray-600 mb-1', 'Código de desconto:'));
+                codeWrapper.appendChild(createTextElement('span', 'font-mono font-bold text-sm', coupon.code));
+                card.appendChild(codeWrapper);
+
+                const actions = document.createElement('div');
+                actions.className = 'flex gap-2';
+                const copyButton = createTextElement('button', 'reco-copy-btn flex-1 px-3 py-2 rounded bg-[#aa6e69] text-white text-sm font-medium hover:bg-[#8e5b57] transition-colors', 'Copiar');
+                copyButton.type = 'button';
+                const visitLink = createTextElement('a', 'flex-1 px-3 py-2 rounded bg-[#f5e8e7] text-[#aa6e69] text-sm font-medium hover:bg-[#f0e0db] transition-colors text-center', 'Visitar');
+                visitLink.href = couponUrl;
+                visitLink.target = '_blank';
+                visitLink.rel = 'noopener noreferrer';
+                actions.append(copyButton, visitLink);
+                card.appendChild(actions);
 
                 couponsGrid.appendChild(card);
             });
@@ -324,9 +347,9 @@ function initRecomendacoes() {
                 const subcategoryFiltersContainer = section.querySelector('#reco-subcategory-filters');
                 const productsTitle = section.querySelector('#reco-products-title');
                 if (productsGrid) {
-                    productsGrid.innerHTML = `\n                        <div class="w-full py-12 text-center text-gray-700 font-semibold">\n                            Em breve — Recomendações de produtos\n                        </div>`;
+                    productsGrid.replaceChildren(createTextElement('div', 'w-full py-12 text-center text-gray-700 font-semibold', 'Em breve - Recomendações de produtos'));
                 }
-                if (subcategoryFiltersContainer) subcategoryFiltersContainer.innerHTML = '';
+                if (subcategoryFiltersContainer) subcategoryFiltersContainer.replaceChildren();
                 if (productsTitle) productsTitle.textContent = 'Em breve';
                 return;
             }
@@ -336,9 +359,8 @@ function initRecomendacoes() {
             const subcategoryFiltersContainer = section.querySelector('#reco-subcategory-filters');
             if (!productsGrid || !subcategoryFiltersContainer) return;
 
-            // Clear existing products
-            productsGrid.innerHTML = '';
-            subcategoryFiltersContainer.innerHTML = '';
+            productsGrid.replaceChildren();
+            subcategoryFiltersContainer.replaceChildren();
 
             // Map category names to normalized filter keys
             const categoryMap = {
@@ -351,23 +373,32 @@ function initRecomendacoes() {
 
             // Render product cards with normalized category and subcategory
             products.forEach(product => {
-                const filterKey = categoryMap[product.category] || product.category.toLowerCase();
-                const subcat = product.subcategory ? product.subcategory.trim() : '';
+                if (!product || typeof product !== 'object' || typeof product.title !== 'string') return;
+                const category = typeof product.category === 'string' ? product.category : '';
+                const imageUrl = getSafeAssetUrl(`assets/images/recomendacoes/${product.image_filename}`, 'assets/images/recomendacoes/');
+                if (!imageUrl) return;
+                const filterKey = categoryMap[category] || category.toLowerCase();
+                const subcat = typeof product.subcategory === 'string' ? product.subcategory.trim() : '';
                 const card = document.createElement('div');
                 card.className = 'reco-product-card bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow';
                 card.setAttribute('data-category', filterKey);
                 card.setAttribute('data-subcategory', subcat);
-                card.innerHTML = `
-                    <div class="reco-img-figure">
-                        <img src="${'assets/images/recomendacoes/' + product.image_filename}" 
-                             alt="${product.title}" 
-                             class="reco-img"
-                             onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=&quot;text-xs text-gray-400&quot;>Imagem não carregada</div>'">
-                    </div>
-                    <div class="p-4">
-                        <h4 class="font-semibold text-sm text-gray-800">${product.title}</h4>
-                    </div>
-                `;
+                const imageFigure = document.createElement('div');
+                imageFigure.className = 'reco-img-figure';
+                const image = document.createElement('img');
+                image.src = imageUrl;
+                image.alt = product.title;
+                image.className = 'reco-img';
+                image.addEventListener('error', () => {
+                    image.replaceWith(createTextElement('div', 'text-xs text-gray-400', 'Imagem não carregada'));
+                }, { once: true });
+                imageFigure.appendChild(image);
+                card.appendChild(imageFigure);
+
+                const titleWrapper = document.createElement('div');
+                titleWrapper.className = 'p-4';
+                titleWrapper.appendChild(createTextElement('h4', 'font-semibold text-sm text-gray-800', product.title));
+                card.appendChild(titleWrapper);
                 productsGrid.appendChild(card);
             });
 
@@ -397,7 +428,7 @@ function initRecomendacoes() {
 
             // Function to render subcategory buttons
             function renderSubcategoryButtons() {
-                subcategoryFiltersContainer.innerHTML = '';
+                subcategoryFiltersContainer.replaceChildren();
                 const selectedCategory = document.querySelector('.reco-category-card.reco-active')?.getAttribute('data-category') || 'all';
 
                 // Botão 'Todos'
@@ -567,18 +598,22 @@ async function initConvenios() {
         if (!conveniGrid) return;
         
         // Clear existing content
-        conveniGrid.innerHTML = '';
+        conveniGrid.replaceChildren();
         
         // Render each active convênio
         convenios.filter(conv => conv.ativo).forEach(convenio => {
+            const logoUrl = getSafeAssetUrl(convenio.logo, 'assets/images/convenios/', false);
+            if (!logoUrl || typeof convenio.nome !== 'string') return;
             const conveniSpace = document.createElement('div');
             conveniSpace.className = 'convenio-logo-space';
-            conveniSpace.innerHTML = `
-                <div class="h-12 w-full flex items-center justify-center">
-                    <img src="${convenio.logo}" alt="Logo ${convenio.nome}" class="h-full object-contain">
-                </div>
-                <p class="convenio-name">${convenio.nome}</p>
-            `;
+            const logoWrapper = document.createElement('div');
+            logoWrapper.className = 'h-12 w-full flex items-center justify-center';
+            const logo = document.createElement('img');
+            logo.src = logoUrl;
+            logo.alt = `Logo ${convenio.nome}`;
+            logo.className = 'h-full object-contain';
+            logoWrapper.appendChild(logo);
+            conveniSpace.append(logoWrapper, createTextElement('p', 'convenio-name', convenio.nome));
             conveniGrid.appendChild(conveniSpace);
         });
     } catch (error) {
@@ -588,49 +623,6 @@ async function initConvenios() {
 
 // Initialize convenios when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    // Centralized analytics delegator: reads data-analytics-* attributes and sends events
-    function sendAnalyticsEvent(name, params) {
-        try {
-            const payload = Object.assign({}, params || {});
-            // prefer beacon transport to improve delivery when navigation occurs
-            if (!payload.transport_type) payload.transport_type = 'beacon';
-            if (window.gtag && typeof window.gtag === 'function') {
-                window.gtag('event', name, payload);
-                return;
-            }
-            if (window.dataLayer && Array.isArray(window.dataLayer)) {
-                window.dataLayer.push(Object.assign({ event: name }, params || {}));
-                return;
-            }
-            if (window.ga && typeof window.ga === 'function') {
-                // fallback: send as generic event
-                window.ga('send', 'event', 'interaction', name, JSON.stringify(params || {}));
-                return;
-            }
-        } catch (err) {
-            console.warn('Failed to send analytics event', err);
-        }
-    }
-
-    // Delegate clicks on elements that declare data-analytics-name
-    document.body.addEventListener('click', (e) => {
-        const el = e.target.closest('[data-analytics-name]');
-        if (!el) return;
-        try {
-            const name = el.getAttribute('data-analytics-name');
-            const params = {};
-            for (const attr of Array.from(el.attributes)) {
-                if (attr.name && attr.name.indexOf('data-analytics-param-') === 0) {
-                    const key = attr.name.slice('data-analytics-param-'.length);
-                    params[key] = attr.value;
-                }
-            }
-            sendAnalyticsEvent(name, params);
-        } catch (err) {
-            console.warn('Analytics delegation error', err);
-        }
-    }, false);
-
     initConvenios();
 });
 
