@@ -368,7 +368,8 @@ function initRecomendacoes() {
                 'Omega': 'omega3',
                 'Whey': 'whey',
                 'Creatina': 'creatina',
-                'Magnésio': 'magnesio'
+                'Magnésio': 'magnesio',
+                'Cúrcuma': 'curcuma'
             };
 
             // Render product cards with normalized category and subcategory

@@ -682,6 +682,50 @@
         "badges":  [
 
                    ]
+    },
+    {
+        "id":  64,
+        "title":  "Cúrcuma Complex União Vegetal",
+        "category":  "Cúrcuma",
+        "subcategory":  "Tradicional",
+        "image":  "assets/images/recomendacoes/curcuma-uniao-vegetal.png",
+        "image_filename":  "curcuma-uniao-vegetal.png",
+        "badges":  [
+
+                   ]
+    },
+    {
+        "id":  65,
+        "title":  "Cúrcuma Ocean Drop",
+        "category":  "Cúrcuma",
+        "subcategory":  "Tradicional",
+        "image":  "assets/images/recomendacoes/curcuma-oceandrop.png",
+        "image_filename":  "curcuma-oceandrop.png",
+        "badges":  [
+
+                   ]
+    },
+    {
+        "id":  66,
+        "title":  "Cúrcuma Plus Vitafor",
+        "category":  "Cúrcuma",
+        "subcategory":  "Tradicional",
+        "image":  "assets/images/recomendacoes/curcuma-plus-vitafor.png",
+        "image_filename":  "curcuma-plus-vitafor.png",
+        "badges":  [
+
+                   ]
+    },
+    {
+        "id":  67,
+        "title":  "Curcumina Nutrify",
+        "category":  "Cúrcuma",
+        "subcategory":  "Tradicional",
+        "image":  "assets/images/recomendacoes/curcumina-nutrify.png",
+        "image_filename":  "curcumina-nutrify.png",
+        "badges":  [
+
+                   ]
     }
 ]
 
